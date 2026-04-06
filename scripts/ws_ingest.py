@@ -6,33 +6,62 @@ from datetime import datetime, timezone
 
 import websocket
 from kafka import KafkaProducer
+from kafka.errors import NoBrokersAvailable
 
 WS_URL = "wss://advanced-trade-ws.coinbase.com"
 
 
-def make_producer(bootstrap_servers: str):
+def make_producer(bootstrap_servers: str) -> KafkaProducer:
     return KafkaProducer(
         bootstrap_servers=bootstrap_servers,
-        value_serializer=lambda v: json.dumps(v).encode("utf-8")
+        value_serializer=lambda v: json.dumps(v).encode("utf-8"),
     )
 
 
-def build_subscribe_message(product_id: str):
+def get_producer_with_retry(
+    bootstrap_servers: str,
+    max_retries: int = 15,
+    retry_delay: int = 3,
+) -> KafkaProducer:
+    last_error = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            producer = make_producer(bootstrap_servers)
+            print(
+                f"Connected to Kafka at {bootstrap_servers} "
+                f"(attempt {attempt}/{max_retries})"
+            )
+            return producer
+        except NoBrokersAvailable as e:
+            last_error = e
+            print(
+                f"Kafka not ready yet at {bootstrap_servers} "
+                f"(attempt {attempt}/{max_retries}). Retrying in {retry_delay}s..."
+            )
+            time.sleep(retry_delay)
+
+    raise RuntimeError(
+        f"Could not connect to Kafka at {bootstrap_servers} after "
+        f"{max_retries} attempts"
+    ) from last_error
+
+
+def build_subscribe_message(product_id: str) -> dict:
     return {
         "type": "subscribe",
         "channel": "ticker",
-        "product_ids": [product_id]
+        "product_ids": [product_id],
     }
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--pair", type=str, default="BTC-USD")
     parser.add_argument("--minutes", type=int, default=15)
-    parser.add_argument("--bootstrap_servers", type=str, default="localhost:9092")
+    parser.add_argument("--bootstrap_servers", type=str, default="kafka:9092")
     args = parser.parse_args()
 
-    producer = make_producer(args.bootstrap_servers)
+    producer = get_producer_with_retry(args.bootstrap_servers)
     end_time = time.time() + args.minutes * 60
 
     os.makedirs("data/raw", exist_ok=True)
@@ -57,7 +86,7 @@ def main():
                 event = {
                     "ingest_time": datetime.now(timezone.utc).isoformat(),
                     "product_id": args.pair,
-                    "payload": parsed
+                    "payload": parsed,
                 }
 
                 producer.send("ticks.raw", event)

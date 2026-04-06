@@ -10,7 +10,7 @@ COPY . /app
 # Install dependencies
 RUN pip install --no-cache-dir \
     kafka-python \
-    websockets \
+    websocket-client \
     pyyaml
 
 # Default command: run ingestion
