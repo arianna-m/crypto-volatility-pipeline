@@ -66,6 +66,10 @@ services:
       MODEL_VARIANT: "${MODEL_VARIANT:-ml}"
       GIT_SHA: "${GIT_SHA:-unknown}"
       BASELINE_CONFIG_PATH: "/app/models/artifacts/baseline_zscore_config.json"
+      KAFKA_LAG_ENABLED: "true"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+      KAFKA_LAG_GROUP_ID: "crypto-featurizer"
+      KAFKA_LAG_TOPIC: "ticks.raw"
     ports:
       - "8000:8000"
     volumes:

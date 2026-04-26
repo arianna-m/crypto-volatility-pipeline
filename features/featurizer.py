@@ -51,11 +51,18 @@ def main():
     parser.add_argument("--bootstrap_servers", type=str, default="localhost:9092")
     parser.add_argument("--max_messages", type=int, default=100)
     parser.add_argument("--out_path", type=str, default="data/processed/features.parquet")
+    parser.add_argument(
+        "--group_id",
+        type=str,
+        default="crypto-featurizer",
+        help="Consumer group (must match KAFKA_LAG_GROUP_ID in the API for lag metrics).",
+    )
     args = parser.parse_args()
 
     consumer = KafkaConsumer(
         args.topic_in,
         bootstrap_servers=args.bootstrap_servers,
+        group_id=args.group_id,
         auto_offset_reset="earliest",
         enable_auto_commit=True,
         consumer_timeout_ms=15000,

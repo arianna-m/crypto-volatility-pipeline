@@ -46,7 +46,7 @@ Expected ports:
 
 - Open Grafana and look in the `Week 6` folder for `Crypto Volatility Week 6`.
 - If provisioning does not load automatically, import `docker/grafana/dashboards/crypto_week6_dashboard.json` manually from the Grafana UI.
-- Use the dashboard panels to watch latency, request rate, error rate, and freshness.
+- Use the dashboard panels to watch latency, request rate, error rate, freshness, and **Kafka consumer lag** (requires `KAFKA_LAG_ENABLED=true` on the API and a stable featurizer `--group_id` matching `KAFKA_LAG_GROUP_ID`, default `crypto-featurizer`).
 
 ## Manual Screenshot Capture
 

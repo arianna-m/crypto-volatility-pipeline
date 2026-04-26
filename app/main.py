@@ -5,6 +5,7 @@ import math
 import os
 import pickle
 import time
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -14,6 +15,8 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException, Response
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
 from pydantic import BaseModel, Field
+
+from app.kafka_lag import start_polling
 
 APP_VERSION = os.getenv("APP_VERSION", "v1.2")
 MODEL_NAME = os.getenv("MODEL_NAME", "random_forest")
@@ -36,8 +39,6 @@ FEATURE_COLUMNS = [
     "log_return",
 ]
 
-app = FastAPI(title="Crypto Volatility API", version=APP_VERSION)
-
 predict_requests = Counter("predict_requests_total", "Total prediction requests")
 predict_errors = Counter("predict_errors_total", "Total prediction failures")
 predict_latency = Histogram(
@@ -48,6 +49,30 @@ predict_latency = Histogram(
 last_prediction_timestamp = Gauge(
     "last_prediction_timestamp_seconds",
     "Unix timestamp of the most recent successful prediction",
+)
+
+# Consumer-group lag: updated by background poller when KAFKA_LAG_ENABLED=true
+kafka_consumer_lag_messages = Gauge(
+    "kafka_consumer_lag_messages",
+    "Sum of (log end offset - group committed offset) for KAFKA_LAG_TOPIC "
+    "and KAFKA_LAG_GROUP_ID; 0 when lag polling is disabled (e.g. CI).",
+)
+kafka_lag_scrape_errors_total = Counter(
+    "kafka_lag_scrape_errors_total",
+    "Failed Kafka admin/end_offsets reads while computing consumer lag",
+)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    start_polling(kafka_consumer_lag_messages, kafka_lag_scrape_errors_total)
+    yield
+
+
+app = FastAPI(
+    title="Crypto Volatility API",
+    version=APP_VERSION,
+    lifespan=lifespan,
 )
 
 

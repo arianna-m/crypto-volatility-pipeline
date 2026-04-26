@@ -23,13 +23,17 @@ These SLOs apply to the FastAPI prediction service exposed at `POST /predict` an
   `rate(predict_errors_total[5m]) / rate(predict_requests_total[5m])`
 - Freshness lag:
   `time() - last_prediction_timestamp_seconds`
+- **Kafka consumer lag** (unconsumed messages behind the featurizer group, sum over partitions of `ticks.raw`):
+  `kafka_consumer_lag_messages`  
+  Exposed by the API when `KAFKA_LAG_ENABLED=true` and `KAFKA_LAG_GROUP_ID` matches the featurizer’s `--group_id` (default `crypto-featurizer`). Polling is off in CI / local single-process tests unless you enable it.
 
 ## Alert Thresholds
 
 - Latency alert: p95 latency `> 0.8` seconds for 5 minutes.
 - Error alert: error rate `> 0.01` for 5 minutes.
 - Staleness alert: freshness lag `> 60` seconds for 2 minutes.
-- Kafka consumer lag: not configured because the API does not currently expose a real lag metric.
+- **Kafka consumer lag (optional / workload-dependent):** total lag `> 100 000` messages for 5 minutes (tune to your stream volume).
+- Lag poller health: `rate(kafka_lag_scrape_errors_total[5m]) > 0.1` sustained (Kafka unreachable or group metadata issues).
 
 ## SLO Violation Definition
 
