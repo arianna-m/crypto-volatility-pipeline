@@ -81,8 +81,10 @@ See also:
 
 ## System Architecture
 
-See:
-- `docs/architecture_diagram.png`
+Full write-up (one-command startup, Mermaid + endpoint table, static figure): `docs/architecture.md`.
+
+See also:
+- `docs/architecture_diagram.png` (static figure; matches `docs/architecture.md`)
 
 **Figure 1: Replay-Mode System Architecture for Crypto Volatility Prediction**
 
