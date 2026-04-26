@@ -2,6 +2,17 @@
 
 Concise ops guide for startup, troubleshooting, and recovery.
 
+## Quick setup
+
+1. Copy env defaults: `cp .env.example .env` (edit if local paths differ).
+2. Install dependencies: `pip install -r requirements.txt`.
+3. API-only baseline mode (no model pickle required):
+   `MODEL_VARIANT=baseline uvicorn app.main:app --host 0.0.0.0 --port 8000`
+4. Full stack from repo root:
+   `docker compose up -d --build`
+5. Smoke test:
+   `curl -s http://127.0.0.1:8000/health` -> `{"status":"ok"}`
+
 ## Startup
 
 1. Start services from repo root:
