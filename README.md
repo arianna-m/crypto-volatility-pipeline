@@ -32,51 +32,90 @@ curl -X POST http://localhost:8000/predict \
 
 ---
 
-*The following overview describes the original forked “Crypto Volatility Spike Detection” pipeline; this repository extends it with the service layer and monitoring above.*
+*This work extends the [original course repo](https://github.com/guhankesav/crypto-volatility-pipeline) (merged into this fork). The **Overview** and pipeline sections below follow that project; this repository adds the FastAPI service, monitoring stack, and team deliverables above.*
 
 ## Overview
+
 This project implements an end-to-end real-time pipeline for detecting short-term volatility spikes in cryptocurrency markets using streaming data.
 
 The system ingests live market data from Coinbase WebSocket, processes it using Kafka, generates features, trains machine learning models, and evaluates performance using MLflow and Evidently.
+
+For the Week 4 team milestone, the system is run in **replay mode** rather than fully live mode. A saved raw dataset is replayed through the pipeline to validate the full system prototype.
 
 The prediction task is to determine whether volatility in the next 60 seconds exceeds a threshold.
 
 ---
 
 ## Problem Definition
+
 Given market observations up to time t, predict:
 
-Volatility spike in (t, t + 60s]
+**Volatility spike in (t, t + 60s]**
 
 This is formulated as a binary classification problem.
 
-Evaluation Metric:
-- Primary: PR-AUC (due to class imbalance)
-- Secondary: F1-score
+### Evaluation Metrics
+- **Primary:** PR-AUC, due to strong class imbalance
+- **Secondary:** F1-score
+
+---
+
+## Selected Model
+
+Our team selected **Random Forest** as the base model for the Week 4 prototype.
+
+### Why Random Forest
+- It achieved the best overall PR-AUC among the available trained models
+- It significantly outperformed the z-score baseline and Logistic Regression
+- It outperformed Extra Trees on the evaluated test set
+- It can be loaded directly as a saved pipeline artifact for API serving
+- It satisfies the deployment and latency needs of the replay-mode prototype
+
+See also:
+- `docs/selection_rationale.md`
+- `docs/model_card_v1.md`
 
 ---
 
 ## System Architecture
 
-WebSocket → Kafka (`ticks.raw`) → Feature Pipeline → Kafka (`ticks.features`)
-→ Parquet Storage → Model Training → MLflow → Evaluation + Evidently
+See:
+- `docs/architecture_diagram.png`
+
+**Figure 1: Replay-Mode System Architecture for Crypto Volatility Prediction**
+
+The system flow is:
+
+Replay Dataset → Kafka (`ticks.raw`) → Feature Pipeline → Kafka (`ticks.features`) → FastAPI Service → Prediction Output
+
+MLflow is used as a side service for experiment tracking and model artifact management.
+
+### Main Components
+- **Replay Dataset**: stored historical raw market data used to simulate live input
+- **Kafka (KRaft)**: message bus for raw and engineered feature streams
+- **Featurizer**: transforms raw ticks into model-ready features
+- **FastAPI**: exposes `/health`, `/version`, `/metrics`, and `/predict`
+- **MLflow**: tracks model experiments and artifacts
 
 ---
 
 ## Repository Structure
 
-/data/raw/               Raw streamed data  
-/data/processed/         Feature dataset  
-/features/               Feature engineering pipeline  
-/models/                 Training, inference, artifacts  
-/notebooks/              EDA analysis  
-/reports/                Evaluation + drift reports  
-/scripts/                Ingestion + replay + validation  
-/docker/                 Docker Compose + Dockerfile  
-/docs/                   Feature spec, model card, GenAI log  
-/handoff/                Submission bundle  
-requirements.txt  
-README.md  
+```text
+/data/raw/               Raw streamed or replayable data
+/data/processed/         Feature datasets
+/features/               Feature engineering pipeline
+/models/                 Training, inference, artifacts
+/notebooks/              EDA analysis
+/reports/                Evaluation + drift reports
+/scripts/                Ingestion + replay + validation
+/docker/                 Docker Compose + Dockerfiles
+/docs/                   Feature spec, model card, GenAI log, team docs
+/handoff/                Submission bundle
+/app/                    FastAPI application
+requirements.txt
+README.md
+```
 
 ---
 
@@ -84,21 +123,27 @@ README.md
 
 ### Milestone 1: Streaming Setup
 - Kafka + MLflow via Docker
-- WebSocket ingestion (Coinbase)
+- WebSocket ingestion from Coinbase
 - Data published to `ticks.raw`
+- Kafka consumer validation
+- Scoping brief
 
-### Milestone 2: Feature Engineering & EDA
-- Features computed from streaming data:
+### Milestone 2: Feature Engineering, Replay, and EDA
+- Features computed from streaming data, including:
   - midprice
+  - best bid
+  - best ask
+  - price
+  - best bid quantity
+  - best ask quantity
   - spread
   - log return
-  - order book features
-- Output to `ticks.features`
+- Output written to `ticks.features`
 - Replay pipeline ensures deterministic features
-- Evidently report for drift analysis
+- Evidently report used for drift analysis
 
-### Milestone 3: Modeling & Evaluation
-- Baseline: Z-score rule
+### Milestone 3: Modeling and Evaluation
+- Baseline: z-score rule
 - ML models:
   - Logistic Regression
   - Random Forest
@@ -106,14 +151,21 @@ README.md
 - Metrics:
   - PR-AUC
   - F1-score
-- MLflow tracking for experiments
+- MLflow tracking for experiments and artifacts
+
+### Week 4 Team Prototype
+- Base model selected
+- Architecture diagram created
+- FastAPI endpoints implemented
+- Kafka and MLflow launched using Docker Compose
+- Replay-mode system tested
+- Team charter and selection rationale completed
 
 ---
 
-## How to Run
+## Services
 
-### 1. Start services
-docker compose up -d
+The Week 4 prototype includes the following services:
 
 - **Kafka (KRaft)**: streaming layer for raw and engineered messages
 - **MLflow**: experiment tracking and model artifact storage
@@ -146,7 +198,7 @@ docker ps
 Expected containers:
 - `kafka`
 - `mlflow`
-- `ingestor` (when started; streams from Coinbase WebSocket into Kafka)
+- `ingestor` (optional: WebSocket → Kafka, included in `docker/compose.yaml` with upstream)
 - `crypto-api`
 
 ### 3. Open MLflow UI
@@ -349,46 +401,126 @@ python scripts/replay.py --raw data/raw/*.ndjson --out data/processed/features.p
 
 - **Random Forest** achieved the highest PR-AUC, approximately **0.96**
 - Tree-based models significantly outperformed linear models
-- Volatility prediction is non-linear
-- Model meets real-time inference constraints
+- The volatility spike prediction task is strongly non-linear
+- The selected model satisfies replay-mode and real-time inference requirements
 
 ---
 
 ## Data Drift Analysis
 
-Evidently report compares:
-- Early (training) vs late (test) data
+Evidently was used to compare:
+- early training window
+- later test window
 
-Findings:
-- ~70% of features show drift
-- Core features remain stable
-- Model generalizes well across time
+### Findings
+- around **70% of features** showed measurable drift
+- the most important core features remained stable
+- the selected model generalized well across time despite drift
+
+See:
+- `reports/evidently/`
+- `reports/model_eval.pdf`
 
 ---
 
 ## Inference Performance
 
-- ~195,000 rows/sec
-- ~0.005 ms per row
-- Meets <2x real-time requirement
+Approximate measured inference performance:
+- **~195,000 rows/sec**
+- **~0.005 ms per row**
+
+This is comfortably within the deployment requirement and supports near-real-time serving.
+
+---
+
+## Model Artifacts
+
+Saved artifacts can be found in:
+
+```text
+models/artifacts/
+```
+
+Important files include:
+- `random_forest_pipeline.pkl`
+- `logreg_pipeline.pkl`
+- `extra_trees_pipeline.pkl`
+- `feature_columns.json`
+- `training_summary.json`
+- prediction CSV files
+- evaluation reports and plots
+
+---
+
+## Documentation
+
+Important documentation files include:
+
+- `docs/team_charter.md`
+- `docs/selection_rationale.md`
+- `docs/feature_spec.md`
+- `docs/model_card_v1.md`
+- `docs/genai_appendix.md`
+- `docs/scoping_brief.pdf`
+- `docs/architecture_diagram.png`
+
+---
+
+## Team Norms
+
+### Communication
+- Primary channel: WhatsApp group chat
+- Secondary: Email and Google Drive folder
+- Expected response time:
+  - weekdays: within 4–6 hours
+  - weekends: within 12 hours
+- Blocking issues, major changes, or delays should be communicated as early as possible
+
+### Meetings
+- Weekly meeting: Tuesdays, 9:30–10:30 PM EST
+- Format: Online, typically Google Meet
+- Members are expected to come prepared with updates
+
+### Workflow
+- Internal deadlines are set at least 12 hours before the final submission deadline
+- Work is tracked through the GitHub repository, PRs/issues, and shared notes
+- If a team member falls behind, the issue should be raised early so tasks can be redistributed
+
+### Quality Standards
+- Code should run locally through Docker Compose
+- Code should remain readable and minimally tested
+- Deliverables should be clean, documented, and aligned with the rubric
+
+### Accountability
+- Each team member owns their assigned component end-to-end
+- Progress should be visible through commits and status updates
+
+### Conflict Resolution
+- Start with direct team discussion
+- If unresolved, use a majority decision
+- If still unresolved, escalate to the TA or instructor
 
 ---
 
 ## Handoff
 
-The `/handoff/` folder contains:
+The `/handoff/` folder is intended to contain:
 - Docker setup
-- Model artifacts
-- Feature spec + model card
-- Sample data + predictions
-- Reports (evaluation + drift)
+- model artifacts
+- feature specification and model card
+- sample data and predictions
+- evaluation and drift reports
+- reproducible instructions for the team project handoff
 
 ---
 
 ## GenAI Usage
 
 Details are documented in:
+
+```text
 docs/genai_appendix.md
+```
 
 ---
 
@@ -452,9 +584,12 @@ curl http://localhost:8000/metrics | grep -E "predict_requests_total|predict_lat
 ## Conclusion
 
 This project demonstrates a production-style pipeline integrating:
-- Streaming ingestion
-- Feature engineering
-- Model training and evaluation
-- Drift monitoring
+- streaming ingestion
+- feature engineering
+- model training and evaluation
+- experiment tracking
+- model serving
+- monitoring
+- replay-mode validation
 
-The system successfully detects volatility spikes in real time.
+The system successfully detects volatility spikes in cryptocurrency market data and provides a strong foundation for later live deployment and team-level system extensions.
