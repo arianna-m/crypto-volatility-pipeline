@@ -8,6 +8,8 @@ It extends the earlier crypto volatility spike detection work with a FastAPI ser
 
 ---
 
+**Minimal setup (≤5 steps):** [docs/runbook.md](docs/runbook.md) · **Burst load / latency (100 requests):** [docs/latency_report.md](docs/latency_report.md) · **Final metrics summary:** [docs/final_summary.md](docs/final_summary.md) · **Replay→serving validation path:** [docs/replay_validation.md](docs/replay_validation.md)
+
 ## Quick Start
 
 ```bash
@@ -79,8 +81,10 @@ See also:
 
 ## System Architecture
 
-See:
-- `docs/architecture_diagram.png`
+Full write-up (one-command startup, Mermaid + endpoint table, static figure): `docs/architecture.md`.
+
+See also:
+- `docs/architecture_diagram.png` (static figure; matches `docs/architecture.md`)
 
 **Figure 1: Replay-Mode System Architecture for Crypto Volatility Prediction**
 

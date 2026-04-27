@@ -27,3 +27,21 @@ groups:
         annotations:
           summary: "Crypto API predictions are stale"
           description: "No successful prediction has been recorded for more than 60 seconds."
+
+      - alert: CryptoKafkaHighConsumerLag
+        expr: kafka_consumer_lag_messages > 100000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High Kafka consumer lag for the monitored featurizer group"
+          description: "kafka_consumer_lag_messages has exceeded 100k for 5m (tune threshold to your load)."
+
+      - alert: CryptoKafkaLagPollErrors
+        expr: rate(kafka_lag_scrape_errors_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API cannot read Kafka consumer lag"
+          description: "Kafka admin/end_offsets errors while computing lag. Check KAFKA_BOOTSTRAP_SERVERS and that the broker is reachable."
